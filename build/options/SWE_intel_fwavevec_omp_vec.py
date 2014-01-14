@@ -30,7 +30,7 @@
 loop_openmp='yes'
 #countflops='yes'
 compiler='intel'
-parallelization='mpi'
+#parallelization='mpi'
 solver='fwavevec'
 #solver='augrie'
 #writeNetCDF='yes'
