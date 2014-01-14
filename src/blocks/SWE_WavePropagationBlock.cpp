@@ -148,11 +148,15 @@ SWE_WavePropagationBlock::computeNumericalFluxes ()
 
 		float l_maxWaveSpeed = (float) 0.;
 //		solver::Hybrid<float> wavePropagationSolver;
-#pragma message "augmented Riemann solver was hardcoded set for OpenMP!"
+#if WAVE_PROPAGATION_SOLVER==4
+		solver::FWaveVec<float> wavePropagationSolver;
+#else // WAVE_PROPAGATION_SOLVER==4
+//#pragma message "augmented Riemann solver was hardcoded set for OpenMP!"
 		solver::AugRie_SIMD wavePropagationSolver;
+#endif // WAVE_PROPAGATION_SOLVER==4
 
 		// Use OpenMP for the outer loop
-#pragma omp for
+#pragma omp for schedule(static) nowait
 #endif // LOOP_OPENMP
 		for (int i = 1; i < nx + 2; i++) {
 			int j = 1;
@@ -213,7 +217,7 @@ SWE_WavePropagationBlock::computeNumericalFluxes ()
 
 #ifdef LOOP_OPENMP
 		// Use OpenMP for the outer loop
-#pragma omp for
+#pragma omp for schedule(static) nowait 
 #endif // LOOP_OPENMP
 		for (int i = 1; i < nx + 1; i++) {
 			int j = 1;
@@ -314,8 +318,8 @@ SWE_WavePropagationBlock::updateUnknowns (float dt)
 {
 	//update cell averages with the net-updates
 #ifdef LOOP_OPENMP
-#pragma omp parallel for
-#endif // LOOP_OPENMP
+#pragma omp parallel for schedule(static)
+#endif // LOOP_OPENMP 
 	for (int i = 1; i < nx + 1; i++) {
 
 #ifdef VECTORIZE

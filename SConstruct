@@ -112,7 +112,9 @@ vars.AddVariables(
 
   BoolVariable( 'copyenv', 'copy the whole environment', False ),
   
-  BoolVariable( 'countflops', 'enable flop counting; defines the macro COUNTFLOPS', False )
+  BoolVariable( 'countflops', 'enable flop counting; defines the macro COUNTFLOPS', False ),
+
+  BoolVariable( 'loop_openmp', 'enable loop parallelization using OpenMP', False )
 )
 
 # external variables
@@ -227,6 +229,10 @@ elif env['vectorization'] == 'AVX':
 
 if env['countflops']:
   env.Append(CCFLAGS=['-DCOUNTFLOPS'])
+
+if env['loop_openmp']:
+  env.Append(CCFLAGS=['-DLOOP_OPENMP', '-openmp'])
+  env.Append(LINKFLAGS=['-openmp'])
 
 # Vectorization?
 if env['compileMode'] == 'release' and env['vectorize']:
