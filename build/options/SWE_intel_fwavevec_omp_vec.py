@@ -30,10 +30,11 @@
 loop_openmp='yes'
 #countflops='yes'
 compiler='intel'
-#parallelization='mpi'
+parallelization='mpi'
 solver='fwavevec'
 #solver='augrie'
 #writeNetCDF='yes'
+write_output='no'
 
 # Library paths (only required of not installed in default path)
 #netCDFDir=''

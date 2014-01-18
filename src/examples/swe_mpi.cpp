@@ -127,7 +127,9 @@ int main( int argc, char** argv ) {
   #ifndef READXML
   args.addOption("grid-size-x", 'x', "Number of cell in x direction");
   args.addOption("grid-size-y", 'y', "Number of cell in y direction");
+  //#ifdef WRITE_OUTPUT
   args.addOption("output-basepath", 'o', "Output base file name");
+  //#endif // WRITE_OUTPUT
   args.addOption("output-steps-count", 'c', "Number of output time steps");
   #ifdef ASAGI
   args.addOption("bathymetry-file", 'b', "File containing the bathymetry");
@@ -408,11 +410,13 @@ int main( int argc, char** argv ) {
 		  l_dX, l_dY,
 		  l_blockPositionX*l_nXLocal, l_blockPositionY*l_nYLocal );
 #endif
+#ifdef WRITE_OUTPUT
   // Write zero time step
   l_writer.writeTimeStep( l_wavePropgationBlock.getWaterHeight(),
                           l_wavePropgationBlock.getDischarge_hu(),
                           l_wavePropgationBlock.getDischarge_hv(),
                           (float) 0.);
+#endif // WRITE_OUTPUT
   /**
    * Simulation.
    */
@@ -485,6 +489,7 @@ int main( int argc, char** argv ) {
       progressBar.update(l_t);
     }
 
+#ifdef WRITE_OUPUT
     // print current simulation time
     progressBar.clear();
     tools::Logger::logger.printOutputTime(l_t);
@@ -495,6 +500,7 @@ int main( int argc, char** argv ) {
                             l_wavePropgationBlock.getDischarge_hu(),
                             l_wavePropgationBlock.getDischarge_hv(),
                             l_t);
+#endif // WRITE_OUTPUT
   }
 
   /**

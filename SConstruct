@@ -114,7 +114,9 @@ vars.AddVariables(
   
   BoolVariable( 'countflops', 'enable flop counting; defines the macro COUNTFLOPS', False ),
 
-  BoolVariable( 'loop_openmp', 'enable loop parallelization using OpenMP', False )
+  BoolVariable( 'loop_openmp', 'enable loop parallelization using OpenMP', False ),
+
+  BoolVariable( 'write_output', 'write output files at each checkpoint', True )
 )
 
 # external variables
@@ -233,6 +235,9 @@ if env['countflops']:
 if env['loop_openmp']:
   env.Append(CCFLAGS=['-DLOOP_OPENMP', '-openmp'])
   env.Append(LINKFLAGS=['-openmp'])
+
+if env['write_output']:
+  env.Append(CCFLAGS=['-DWRITE_OUTPUT'])
 
 # Vectorization?
 if env['compileMode'] == 'release' and env['vectorize']:
