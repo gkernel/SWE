@@ -40,6 +40,8 @@
 #include <omp.h>
 #endif
 
+#define VEC_LENGTH 4
+
 /**
  * Constructor of a SWE_WavePropagationBlock.
  *
@@ -192,11 +194,11 @@ SWE_WavePropagationBlock::computeNumericalFluxes ()
 				float maxEdgeSpeed;
 
 				wavePropagationSolver.computeNetUpdates (
-					&h[i - 1][j], &h[i][j],
-					&hu[i - 1][j], &hu[i][j],
-					&b[i - 1][j], &b[i][j],
-					&hNetUpdatesLeft[i - 1][j - 1], &hNetUpdatesRight[i - 1][j - 1],
-					&huNetUpdatesLeft[i - 1][j - 1], &huNetUpdatesRight[i - 1][j - 1],
+					h[i - 1][j], h[i][j],
+					hu[i - 1][j], hu[i][j],
+					b[i - 1][j], b[i][j],
+					hNetUpdatesLeft[i - 1][j - 1], hNetUpdatesRight[i - 1][j - 1],
+					huNetUpdatesLeft[i - 1][j - 1], huNetUpdatesRight[i - 1][j - 1],
 					maxEdgeSpeed
 				);
 
@@ -435,7 +437,7 @@ SWE_WavePropagationBlock::computeNumericalFluxes_innerBlock ()
 			// Vectorize the inner loop
 #pragma simd
 #endif // WAVE_PROPAGATION_SOLVER==4 and defined VECTORIZE
-			for (j = 2; j < end_ny_1_1; ++j) {
+			for (j = 2; j < end_ny_1_1; j+=VEC_LENGTH) {
 				float maxEdgeSpeed;
 
 				wavePropagationSolver.computeNetUpdates_cilk (
@@ -467,7 +469,7 @@ SWE_WavePropagationBlock::computeNumericalFluxes_innerBlock ()
 		// Vectorize the inner loop
 #pragma simd
 #endif // WAVE_PROPAGATION_SOLVER==4
-			for (j = 2; j < end_ny_1_2; j++) {
+			for (j = 2; j < end_ny_1_2; j+=VEC_LENGTH) {
 				float maxEdgeSpeed;
 
 				wavePropagationSolver.computeNetUpdates_cilk (
@@ -504,7 +506,7 @@ SWE_WavePropagationBlock::computeNumericalFluxes_innerBlock ()
 #ifdef LOOP_OPENMP
 			#pragma omp for schedule(static) nowait
 #endif
-			for (j = 2; j < end_ny_1_1; ++j) {
+			for (j = 2; j < end_ny_1_1; j+=VEC_LENGTH) {
 	            float maxEdgeSpeed;
 					
 				wavePropagationSolver.computeNetUpdates_cilk (
