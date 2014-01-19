@@ -139,6 +139,12 @@ public:
 	//computes the net-updates for the block
 	void computeNumericalFluxes ();
 
+	//computes the net-updates for the inner block only
+	void computeNumericalFluxes_innerBlock ();
+
+	//computes the net-updates for the borders only
+	void computeNumericalFluxes_borders ();
+
 	//update the cells
 	void updateUnknowns (float dt);
 

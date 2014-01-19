@@ -89,6 +89,17 @@ void exchangeBottomTopGhostLayers( const int i_bottomNeighborRank, SWE_Block1D* 
                                    const int i_topNeighborRank,    SWE_Block1D* o_topNeighborInflow,    SWE_Block1D* i_topNeighborOutflow,
                                    const MPI_Datatype i_mpiRow);
 
+// Asynchronously Exchanges the left and right ghost layers.
+MPI_Request* exchangeAsyncLeftRightGhostLayers( const int i_leftNeighborRank,  SWE_Block1D* o_leftInflow,  SWE_Block1D* i_leftOutflow,
+                                   const int i_rightNeighborRank, SWE_Block1D* o_rightInflow, SWE_Block1D* i_rightOutflow,
+                                   MPI_Datatype i_mpiCol);
+
+// Asynchronously Exchanges the bottom and top ghist layers.
+MPI_Request* exchangeAsyncBottomTopGhostLayers( const int i_bottomNeighborRank, SWE_Block1D* o_bottomNeighborInflow, SWE_Block1D* i_bottomNeighborOutflow,
+                                   const int i_topNeighborRank,    SWE_Block1D* o_topNeighborInflow,    SWE_Block1D* i_topNeighborOutflow,
+                                   const MPI_Datatype i_mpiRow);
+
+
 /**
  * Main program for the simulation on a single SWE_WavePropagationBlock.
  */
@@ -383,6 +394,8 @@ int main( int argc, char** argv ) {
                   l_topNeighborRank,    l_topInflow,    l_topOutflow,
                   l_mpiRow );
 
+  std::cout << "Exchanged Ghost Layers Initially\n";
+
   // Init fancy progressbar
   tools::ProgressBar progressBar(l_endSimulation, l_mpiRank);
 
@@ -436,7 +449,8 @@ int main( int argc, char** argv ) {
 
     // do time steps until next checkpoint is reached
     while( l_t < l_checkPoints[c] ) {
-      MPI_Request l_request;
+      MPI_Request* l_request;
+      MPI_Status status;
 
       //reset CPU-Communication clock
       tools::Logger::logger.resetClockToCurrentTime("CpuCommunication");
@@ -459,11 +473,17 @@ int main( int argc, char** argv ) {
       // compute numerical flux for inner edge
       l_wavePropgationBlock.computeNumericalFluxes_innerBlock(); // Only Inner Block
 
+      std::cout << __FILE__ << ": " << __LINE__ << endl;
+
       // checking if the borders have been exchanged
-      MPI_Wait(&l_request, &status);
+      MPI_Wait(l_request, &status);
+
+      std::cout << __FILE__ << ": " << __LINE__ << endl;
 
       // compute numerical flux for the blocks
       l_wavePropgationBlock.computeNumericalFluxes_borders(); // Only Borders 
+
+      std::cout << __FILE__ << ": " << __LINE__ << endl;
 
       //! maximum allowed time step width within a block.
       float l_maxTimeStepWidth = l_wavePropgationBlock.getMaxTimestep();
@@ -615,6 +635,8 @@ MPI_Request* exchangeAsyncLeftRightGhostLayers( const int i_leftNeighborRank,  S
 
   // MPI_Status l_status;
   MPI_Request* l_request;
+
+  l_request = (MPI_Request*) malloc(sizeof(MPI_Request));
 
   // int MPI_Sendrecv(void *sendbuf, int sendcount, MPI_Datatype sendtype, 
   //               int dest, int sendtag,
