@@ -381,6 +381,434 @@ SWE_WavePropagationBlock::computeNumericalFluxes ()
 }
 
 /**
+ * Compute net updates for the block.
+ * The member variable #maxTimestep will be updated with the 
+ * maximum allowed time step size
+ */
+void
+SWE_WavePropagationBlock::computeNumericalFluxes_innerBlock ()
+{
+#ifdef COUNTFLOPS
+#ifdef LOOP_OPENMP
+	const double time_begin = omp_get_wtime();
+#else
+	const double time_begin = clock();
+#endif
+#endif
+	//maximum (linearized) wave speed within one iteration
+	float maxWaveSpeed = (float) 0.;
+
+	// compute the loop limits
+	// const int end_ny_1_1 = ny + 1;
+	const int end_ny_1_1 = ny;
+	// const int end_ny_1_2 = ny + 2;
+	const int end_ny_1_2 = ny + 1;
+
+	/***************************************************************************************
+	 * compute the net-updates for the vertical edges
+	 **************************************************************************************/
+
+#ifdef LOOP_OPENMP
+#pragma omp parallel
+#endif // LOOP_OPENMP
+	{
+
+		float l_maxWaveSpeed = (float) 0.;
+#if WAVE_PROPAGATION_SOLVER==4
+		solver::FWaveVec<float> wavePropagationSolver;
+#else // WAVE_PROPAGATION_SOLVER==4
+		solver::AugRie_SIMD wavePropagationSolver;
+#endif // WAVE_PROPAGATION_SOLVER==4
+
+#ifdef LOOP_OPENMP
+		// Use OpenMP for the outer loop
+		#pragma omp for schedule(static) nowait
+#endif // LOOP_OPENMP
+		for (int i = 2; i < nx; i++) {
+			int j;
+
+#if  WAVE_PROPAGATION_SOLVER==4 and defined VECTORIZE
+			// Vectorization is currently only possible for the FWaveVec solver
+			// Vectorize the inner loop
+#pragma simd
+#endif // WAVE_PROPAGATION_SOLVER==4 and defined VECTORIZE
+			for (j = 2; j < end_ny_1_1; ++j) {
+				float maxEdgeSpeed;
+
+				wavePropagationSolver.computeNetUpdates (
+					h[i - 1][j], h[i][j],
+					hu[i - 1][j], hu[i][j],
+					b[i - 1][j], b[i][j],
+					hNetUpdatesLeft[i - 1][j - 1], hNetUpdatesRight[i - 1][j - 1],
+					huNetUpdatesLeft[i - 1][j - 1], huNetUpdatesRight[i - 1][j - 1],
+					maxEdgeSpeed
+				);
+
+#ifdef LOOP_OPENMP
+				//update the thread-local maximum wave speed
+				l_maxWaveSpeed = std::max (l_maxWaveSpeed, maxEdgeSpeed);
+#else // LOOP_OPENMP
+				//update the maximum wave speed
+				maxWaveSpeed = std::max (maxWaveSpeed, maxEdgeSpeed);
+#endif // LOOP_OPENMP
+			}
+			assert (j == ny + 1);
+//		}
+
+	/***************************************************************************************
+	 * compute the net-updates for the horizontal edges
+	 **************************************************************************************/
+
+#if  WAVE_PROPAGATION_SOLVER==4 and defined VECTORIZE
+		// Vectorization is currently only possible for the FWaveVec solver
+		// Vectorize the inner loop
+#pragma simd
+#endif // WAVE_PROPAGATION_SOLVER==4
+			for (j = 2; j < end_ny_1_2; j++) {
+				float maxEdgeSpeed;
+
+				wavePropagationSolver.computeNetUpdates (
+					h[i][j - 1], h[i][j],
+					hv[i][j - 1], hv[i][j],
+					b[i][j - 1], b[i][j],
+					hNetUpdatesBelow[i - 1][j - 1], hNetUpdatesAbove[i - 1][j - 1],
+					hvNetUpdatesBelow[i - 1][j - 1], hvNetUpdatesAbove[i - 1][j - 1],
+					maxEdgeSpeed
+				);
+
+#ifdef LOOP_OPENMP
+				//update the thread-local maximum wave speed
+				l_maxWaveSpeed = std::max (l_maxWaveSpeed, maxEdgeSpeed);
+#else // LOOP_OPENMP
+				//update the maximum wave speed
+				maxWaveSpeed = std::max (maxWaveSpeed, maxEdgeSpeed);
+#endif // LOOP_OPENMP
+			}
+			assert (j = ny + 2);
+		}
+
+// vvvvv  GKUKREJA : Fusing the loops for horizontal and vertical edges, adding this one extra iteration to avoid if looping.
+
+		{
+			int i = nx + 1;
+            int j = 1;
+
+#if  WAVE_PROPAGATION_SOLVER==4 and defined VECTORIZE
+            // Vectorization is currently only possible for the FWaveVec solver
+            // Vectorize the inner loop
+#pragma simd
+#endif // WAVE_PROPAGATION_SOLVER==4 and defined VECTORIZE
+#ifdef LOOP_OPENMP
+			#pragma omp for schedule(static) nowait
+#endif
+            for (j = 1; j < end_ny_1_1; ++j) {
+                float maxEdgeSpeed;
+
+                wavePropagationSolver.computeNetUpdates (
+                        h[i - 1][j], h[i][j],
+                        hu[i - 1][j], hu[i][j],
+                        b[i - 1][j], b[i][j],
+                        hNetUpdatesLeft[i - 1][j - 1], hNetUpdatesRight[i - 1][j - 1],
+                        huNetUpdatesLeft[i - 1][j - 1], huNetUpdatesRight[i - 1][j - 1],
+                        maxEdgeSpeed
+                );
+
+#ifdef LOOP_OPENMP
+                //update the thread-local maximum wave speed
+                l_maxWaveSpeed = std::max (l_maxWaveSpeed, maxEdgeSpeed);
+#else // LOOP_OPENMP
+                //update the maximum wave speed
+                maxWaveSpeed = std::max (maxWaveSpeed, maxEdgeSpeed);
+#endif // LOOP_OPENMP
+            }
+            assert (j == ny + 1);
+		}
+
+// ^^^^^ GKUKREJA : Fusing the loops for horizontal and vertical edges, adding this one extra iteration to avoid if looping.
+
+#ifdef LOOP_OPENMP
+#pragma omp critical
+		{
+			maxWaveSpeed = std::max (l_maxWaveSpeed, maxWaveSpeed);
+#ifdef COUNTFLOPS
+			flops += wavePropagationSolver.flops;
+#endif
+		}
+
+	} // #pragma omp parallel
+#endif
+
+	if (maxWaveSpeed > 0.00001) {
+		//TODO zeroTol
+
+		//compute the time step width
+		//CFL-Codition
+		//(max. wave speed) * dt / dx < .5
+		// => dt = .5 * dx/(max wave speed)
+
+		maxTimestep = std::min (dx / maxWaveSpeed, dy / maxWaveSpeed);
+
+		maxTimestep *= (float) .4; //CFL-number = .5
+	} else {
+		//might happen in dry cells
+		maxTimestep = std::numeric_limits<float>::max ();
+	}
+#ifdef COUNTFLOPS
+#ifdef LOOP_OPENMP
+	time_needed += omp_get_wtime() - time_begin;
+#else
+	time_needed += clock() - time_begin;
+#endif
+#endif
+}
+
+/**
+ * Compute net updates for the block.
+ * The member variable #maxTimestep will be updated with the 
+ * maximum allowed time step size
+ */
+void
+SWE_WavePropagationBlock::computeNumericalFluxes_borders ()
+{
+#ifdef COUNTFLOPS
+#ifdef LOOP_OPENMP
+	const double time_begin = omp_get_wtime();
+#else
+	const double time_begin = clock();
+#endif
+#endif
+	//maximum (linearized) wave speed within one iteration
+	float maxWaveSpeed = (float) 0.;
+
+	// compute the loop limits
+	const int end_ny_1_1 = ny + 1;
+	const int end_ny_1_2 = ny + 2;
+
+	
+#ifdef LOOP_OPENMP
+#pragma omp parallel
+#endif
+	{
+
+		float l_maxWaveSpeed = (float) 0.;
+
+#if WAVE_PROPAGATION_SOLVER==4
+		solver::FWaveVec<float> wavePropagationSolver;
+#else // WAVE_PROPAGATION_SOLVER==4
+		solver::AugRie_SIMD wavePropagationSolver;
+#endif // WAVE_PROPAGATION_SOLVER==4
+
+/***************************************************************************************
+ * compute the net-updates for the vertical edges
+ **************************************************************************************/
+
+#ifdef LOOP_OPENMP
+		// Use OpenMP for the outer loop
+#pragma omp for schedule(static) nowait
+#endif // LOOP_OPENMP
+
+#if  WAVE_PROPAGATION_SOLVER==4 and defined VECTORIZE
+		// Vectorization is currently only possible for the FWaveVec solver
+		// Vectorize the inner loop
+#pragma simd
+#endif // WAVE_PROPAGATION_SOLVER==4 and defined VECTORIZE
+		// Compute vertical edges, for the top and bottom border
+		for (j = 1; j < end_ny_1_1; ++j) {
+			float maxEdgeSpeed;
+
+			wavePropagationSolver.computeNetUpdates (
+				h[0][j], h[1][j],
+				hu[0][j], hu[1][j],
+				b[0][j], b[1][j],
+				hNetUpdatesLeft[0][j - 1], hNetUpdatesRight[0][j - 1],
+				huNetUpdatesLeft[0][j - 1], huNetUpdatesRight[0][j - 1],
+				maxEdgeSpeed
+			);
+
+			wavePropagationSolver.computeNetUpdates (
+				h[nx][j], h[nx + 1][j],
+				hu[nx][j], hu[nx + 1][j],
+				b[nx][j], b[nx + 1][j],
+				hNetUpdatesLeft[nx][j - 1], hNetUpdatesRight[nx][j - 1],
+				huNetUpdatesLeft[nx][j - 1], huNetUpdatesRight[nx][j - 1],
+				maxEdgeSpeed
+			);
+
+#ifdef LOOP_OPENMP
+			//update the thread-local maximum wave speed
+			l_maxWaveSpeed = std::max (l_maxWaveSpeed, maxEdgeSpeed);
+#else // LOOP_OPENMP
+			//update the maximum wave speed
+			maxWaveSpeed = std::max (maxWaveSpeed, maxEdgeSpeed);
+#endif // LOOP_OPENMP
+		}
+		// assert (j == ny + 1);
+
+#ifdef LOOP_OPENMP
+		// Use OpenMP for the outer loop
+#pragma omp for schedule(static) nowait
+#endif // LOOP_OPENMP
+
+#if  WAVE_PROPAGATION_SOLVER==4 and defined VECTORIZE
+		// Vectorization is currently only possible for the FWaveVec solver
+		// Vectorize the inner loop
+#pragma simd
+#endif // WAVE_PROPAGATION_SOLVER==4 and defined VECTORIZE
+		// Compute vertical edges, for the left and right border
+		for(int i = 1; i < nx + 2; i++)
+		{
+            wavePropagationSolver.computeNetUpdates (
+                h[i - 1][1], h[i][1],
+                hu[i - 1][1], hu[i][1],
+                b[i - 1][1], b[i][1],
+                hNetUpdatesLeft[i - 1][0], hNetUpdatesRight[i - 1][0],
+                huNetUpdatesLeft[i - 1][0], huNetUpdatesRight[i - 1][0],
+                maxEdgeSpeed
+            );
+
+            wavePropagationSolver.computeNetUpdates (
+                h[i - 1][end_ny_1_1 - 1], h[i][end_ny_1_1 - 1],
+                hu[i - 1][end_ny_1_1 - 1], hu[i][end_ny_1_1 - 1],
+                b[i - 1][end_ny_1_1 - 1], b[i][end_ny_1_1 - 1],
+                hNetUpdatesLeft[i - 1][end_ny_1_1 - 2], hNetUpdatesRight[i - 1][end_ny_1_1 - 2],
+                huNetUpdatesLeft[i - 1][end_ny_1_1 - 2], huNetUpdatesRight[i - 1][end_ny_1_1 - 2],
+                maxEdgeSpeed
+            );
+
+
+#ifdef LOOP_OPENMP
+			//update the thread-local maximum wave speed
+			l_maxWaveSpeed = std::max (l_maxWaveSpeed, maxEdgeSpeed);
+#else // LOOP_OPENMP
+			//update the maximum wave speed
+			maxWaveSpeed = std::max (maxWaveSpeed, maxEdgeSpeed);
+#endif // LOOP_OPENMP
+		}
+
+
+	/***************************************************************************************
+	 * compute the net-updates for the horizontal edges
+	 **************************************************************************************/
+#ifdef LOOP_OPENMP
+		// Use OpenMP for the outer loop
+		#pragma omp for schedule(static) nowait
+#endif // LOOP_OPENMP
+
+#if  WAVE_PROPAGATION_SOLVER==4 and defined VECTORIZE
+		// Vectorization is currently only possible for the FWaveVec solver
+		// Vectorize the inner loop
+		#pragma simd
+#endif // WAVE_PROPAGATION_SOLVER==4 and defined VECTORIZE
+	 	// Compute horizontal edges, for the top and bottom border
+		for (j = 1; j < end_ny_1_2; j++) {
+			float maxEdgeSpeed;
+
+			wavePropagationSolver.computeNetUpdates (
+				h[1][j - 1], h[1][j],
+				hv[1][j - 1], hv[1][j],
+				b[1][j - 1], b[1][j],
+				hNetUpdatesBelow[0][j - 1], hNetUpdatesAbove[0][j - 1],
+				hvNetUpdatesBelow[0][j - 1], hvNetUpdatesAbove[0][j - 1],
+				maxEdgeSpeed
+			);
+
+			wavePropagationSolver.computeNetUpdates (
+				h[nx + 1][j - 1], h[nx + 1][j],
+				hv[nx + 1][j - 1], hv[nx + 1][j],
+				b[nx + 1][j - 1], b[nx + 1][j],
+				hNetUpdatesBelow[nx][j - 1], hNetUpdatesAbove[nx][j - 1],
+				hvNetUpdatesBelow[nx][j - 1], hvNetUpdatesAbove[nx][j - 1],
+				maxEdgeSpeed
+			);
+
+#ifdef LOOP_OPENMP
+			//update the thread-local maximum wave speed
+			l_maxWaveSpeed = std::max (l_maxWaveSpeed, maxEdgeSpeed);
+#else // LOOP_OPENMP
+			//update the maximum wave speed
+			maxWaveSpeed = std::max (maxWaveSpeed, maxEdgeSpeed);
+#endif // LOOP_OPENMP
+		}
+
+#ifdef LOOP_OPENMP
+		// Use OpenMP for the outer loop
+		#pragma omp for schedule(static) nowait
+#endif // LOOP_OPENMP
+
+#if  WAVE_PROPAGATION_SOLVER==4 and defined VECTORIZE
+		// Vectorization is currently only possible for the FWaveVec solver
+		// Vectorize the inner loop
+		#pragma simd
+#endif // WAVE_PROPAGATION_SOLVER==4 and defined VECTORIZE
+	 	// Compute horizontal edges, for the top and bottom border
+		for (i = 1; i < nx + 2; i++) {
+			float maxEdgeSpeed;
+
+			wavePropagationSolver.computeNetUpdates (
+				h[i][0], h[i][1],
+				hv[i][0], hv[i][1],
+				b[i][0], b[i][1],
+				hNetUpdatesBelow[i - 1][0], hNetUpdatesAbove[i - 1][0],
+				hvNetUpdatesBelow[i - 1][0], hvNetUpdatesAbove[i - 1][0],
+				maxEdgeSpeed
+			);
+
+			wavePropagationSolver.computeNetUpdates (
+				h[i][end_ny_1_2 - 2], h[i][end_ny_1_2 - 1],
+				hv[i][end_ny_1_2 - 2], hv[i][end_ny_1_2 - 1],
+				b[i][end_ny_1_2 - 2], b[i][end_ny_1_2 - 1],
+				hNetUpdatesBelow[i - 1][end_ny_1_2 - 2], hNetUpdatesAbove[i - 1][end_ny_1_2 - 2],
+				hvNetUpdatesBelow[i - 1][end_ny_1_2 - 2], hvNetUpdatesAbove[i - 1][end_ny_1_2 - 2],
+				maxEdgeSpeed
+			);
+
+#ifdef LOOP_OPENMP
+			//update the thread-local maximum wave speed
+			l_maxWaveSpeed = std::max (l_maxWaveSpeed, maxEdgeSpeed);
+#else // LOOP_OPENMP
+			//update the maximum wave speed
+			maxWaveSpeed = std::max (maxWaveSpeed, maxEdgeSpeed);
+#endif // LOOP_OPENMP
+		}
+		// assert (j = ny + 2);
+
+#ifdef LOOP_OPENMP
+#pragma omp critical
+		{
+			maxWaveSpeed = std::max (l_maxWaveSpeed, maxWaveSpeed);
+#ifdef COUNTFLOPS
+			flops += wavePropagationSolver.flops;
+#endif
+		}
+
+	} // #pragma omp parallel
+#endif
+
+	if (maxWaveSpeed > 0.00001) {
+		//TODO zeroTol
+
+		//compute the time step width
+		//CFL-Codition
+		//(max. wave speed) * dt / dx < .5
+		// => dt = .5 * dx/(max wave speed)
+
+		maxTimestep = std::min (dx / maxWaveSpeed, dy / maxWaveSpeed);
+
+		maxTimestep *= (float) .4; //CFL-number = .5
+	} else {
+		//might happen in dry cells
+		maxTimestep = std::numeric_limits<float>::max ();
+	}
+#ifdef COUNTFLOPS
+#ifdef LOOP_OPENMP
+	time_needed += omp_get_wtime() - time_begin;
+#else
+	time_needed += clock() - time_begin;
+#endif
+#endif
+}
+
+/**
  * Updates the unknowns with the already computed net-updates.
  *
  * @param dt time step width used in the update.
