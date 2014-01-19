@@ -35,6 +35,8 @@
 #include <string>
 #include <vector>
 
+#include "epik_user.h"
+
 #ifndef CUDA
 #include "blocks/SWE_WavePropagationBlock.hh"
 #else
@@ -442,6 +444,8 @@ int main( int argc, char** argv ) {
 
   unsigned int l_iterations = 0;
 
+	EPIK_FUNC_START();
+
   // loop over checkpoints
   for(int c=1; c<=l_numberOfCheckPoints; c++) {
 
@@ -508,6 +512,8 @@ int main( int argc, char** argv ) {
       tools::Logger::logger.printSimulationTime(l_t);
       progressBar.update(l_t);
     }
+
+	EPIK_FUNC_END();
 
 #ifdef WRITE_OUPUT
     // print current simulation time
