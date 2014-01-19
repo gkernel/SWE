@@ -190,15 +190,15 @@ SWE_WavePropagationBlock::computeNumericalFluxes ()
 			// Vectorize the inner loop
 #pragma simd
 #endif // WAVE_PROPAGATION_SOLVER==4 and defined VECTORIZE
-			for (; j < end_ny_1_1; ++j) {
+			for (; j < end_ny_1_1; j+=VEC_LENGTH) {
 				float maxEdgeSpeed;
 
-				wavePropagationSolver.computeNetUpdates (
-					h[i - 1][j], h[i][j],
-					hu[i - 1][j], hu[i][j],
-					b[i - 1][j], b[i][j],
-					hNetUpdatesLeft[i - 1][j - 1], hNetUpdatesRight[i - 1][j - 1],
-					huNetUpdatesLeft[i - 1][j - 1], huNetUpdatesRight[i - 1][j - 1],
+				wavePropagationSolver.computeNetUpdates_cilk (
+					&h[i - 1][j], &h[i][j],
+					&hu[i - 1][j], &hu[i][j],
+					&b[i - 1][j], &b[i][j],
+					&hNetUpdatesLeft[i - 1][j - 1], &hNetUpdatesRight[i - 1][j - 1],
+					&huNetUpdatesLeft[i - 1][j - 1], &huNetUpdatesRight[i - 1][j - 1],
 					maxEdgeSpeed
 				);
 
@@ -252,15 +252,15 @@ SWE_WavePropagationBlock::computeNumericalFluxes ()
 		// Vectorize the inner loop
 #pragma simd
 #endif // WAVE_PROPAGATION_SOLVER==4
-			for (; j < end_ny_1_2; j++) {
+			for (; j < end_ny_1_2; j+=VEC_LENGTH) {
 				float maxEdgeSpeed;
 
-				wavePropagationSolver.computeNetUpdates (
-					h[i][j - 1], h[i][j],
-					hv[i][j - 1], hv[i][j],
-					b[i][j - 1], b[i][j],
-					hNetUpdatesBelow[i - 1][j - 1], hNetUpdatesAbove[i - 1][j - 1],
-					hvNetUpdatesBelow[i - 1][j - 1], hvNetUpdatesAbove[i - 1][j - 1],
+				wavePropagationSolver.computeNetUpdates_cilk (
+					&h[i][j - 1], &h[i][j],
+					&hv[i][j - 1], &hv[i][j],
+					&b[i][j - 1], &b[i][j],
+					&hNetUpdatesBelow[i - 1][j - 1], &hNetUpdatesAbove[i - 1][j - 1],
+					&hvNetUpdatesBelow[i - 1][j - 1], &hvNetUpdatesAbove[i - 1][j - 1],
 					maxEdgeSpeed
 				);
 
@@ -324,12 +324,12 @@ SWE_WavePropagationBlock::computeNumericalFluxes ()
                         for (j = 1; j < end_ny_1_1; ++j) {
                                 float maxEdgeSpeed;
 
-                                wavePropagationSolver.computeNetUpdates (
-                                        h[i - 1][j], h[i][j],
-                                        hu[i - 1][j], hu[i][j],
-                                        b[i - 1][j], b[i][j],
-                                        hNetUpdatesLeft[i - 1][j - 1], hNetUpdatesRight[i - 1][j - 1],
-                                        huNetUpdatesLeft[i - 1][j - 1], huNetUpdatesRight[i - 1][j - 1],
+                                wavePropagationSolver.computeNetUpdates_cilk (
+                                        &h[i - 1][j], &h[i][j],
+                                        &hu[i - 1][j], &hu[i][j],
+                                        &b[i - 1][j], &b[i][j],
+                                        &hNetUpdatesLeft[i - 1][j - 1], &hNetUpdatesRight[i - 1][j - 1],
+                                        &huNetUpdatesLeft[i - 1][j - 1], &huNetUpdatesRight[i - 1][j - 1],
                                         maxEdgeSpeed
                                 );
 
@@ -761,7 +761,7 @@ SWE_WavePropagationBlock::computeNumericalFluxes_borders ()
 			);
 
 			wavePropagationSolver.computeNetUpdates (
-				[i][end_ny_1_2 - 2], h[i][end_ny_1_2 - 1],
+				h[i][end_ny_1_2 - 2], h[i][end_ny_1_2 - 1],
 				hv[i][end_ny_1_2 - 2], hv[i][end_ny_1_2 - 1],
 				b[i][end_ny_1_2 - 2], b[i][end_ny_1_2 - 1],
 				hNetUpdatesBelow[i - 1][end_ny_1_2 - 2], hNetUpdatesAbove[i - 1][end_ny_1_2 - 2],
