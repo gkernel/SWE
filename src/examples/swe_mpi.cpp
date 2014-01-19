@@ -394,8 +394,6 @@ int main( int argc, char** argv ) {
                   l_topNeighborRank,    l_topInflow,    l_topOutflow,
                   l_mpiRow );
 
-  std::cout << "Exchanged Ghost Layers Initially\n";
-
   // Init fancy progressbar
   tools::ProgressBar progressBar(l_endSimulation, l_mpiRank);
 
@@ -473,17 +471,11 @@ int main( int argc, char** argv ) {
       // compute numerical flux for inner edge
       l_wavePropgationBlock.computeNumericalFluxes_innerBlock(); // Only Inner Block
 
-      std::cout << __FILE__ << ": " << __LINE__ << endl;
-
       // checking if the borders have been exchanged
       MPI_Wait(l_request, &status);
 
-      std::cout << __FILE__ << ": " << __LINE__ << endl;
-
       // compute numerical flux for the blocks
       l_wavePropgationBlock.computeNumericalFluxes_borders(); // Only Borders 
-
-      std::cout << __FILE__ << ": " << __LINE__ << endl;
 
       //! maximum allowed time step width within a block.
       float l_maxTimeStepWidth = l_wavePropgationBlock.getMaxTimestep();
