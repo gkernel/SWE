@@ -40,7 +40,8 @@
 #include <omp.h>
 #endif
 
-#define VEC_LENGTH 4
+#define VEC_LENGTH 8 
+ 
 
 /**
  * Constructor of a SWE_WavePropagationBlock.
@@ -124,8 +125,11 @@ SWE_WavePropagationBlock::computeNumericalFluxes ()
 	float maxWaveSpeed = (float) 0.;
 
 	// compute the loop limits
-	const int end_ny_1_1 = ny + 1;
-	const int end_ny_1_2 = ny + 2;
+//	const int end_ny_1_1 = ny + 1;
+//	const int end_ny_1_2 = ny + 2;
+        const int end_ny_1_1 = ny & (~(VEC_LENGTH - 1));
+        const int end_ny_1_2 = (ny + 1) & (~(VEC_LENGTH - 1));
+
 
 #if  WAVE_PROPAGATION_SOLVER==5
 	// Note, that ny is used instead of (ny + 1). This is due to the fact, that in the loop below, j starts with 1!
@@ -321,7 +325,7 @@ SWE_WavePropagationBlock::computeNumericalFluxes ()
 #ifdef LOOP_OPENMP
 			#pragma omp for schedule(static) nowait
 #endif
-                        for (j = 1; j < end_ny_1_1; ++j) {
+                        for (j = 1; j < end_ny_1_1; j+=VEC_LENGTH) {
                                 float maxEdgeSpeed;
 
                                 wavePropagationSolver.computeNetUpdates_cilk (
