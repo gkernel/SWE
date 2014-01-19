@@ -1,3 +1,4 @@
 [submodule "submodules/swe_solvers"]
 	path = submodules/swe_solvers
 	url = https://github.com/gkernel/swe_solvers.git
+	branch = cilk
