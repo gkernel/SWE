@@ -174,7 +174,7 @@ if env['parallelization'] in ['mpi', 'mpi_with_cuda']:
     env['CXX'] = 'CC'
   else:
     if env['scalasca_instrument']:
-      env['CXX'] = env['LINKERFORPROGRAMS'] = env.Detect(['scalasca -instrument -comp=none -user -mode=MPI mpiCC', 'scalasca -instrument -comp=none -user -mode=MPI mpicxx'])
+      env['CXX'] = env['LINKERFORPROGRAMS'] = 'scalasca -instrument -comp=none -user -mode=MPI mpiCC'
     else:
       env['CXX'] = env['LINKERFORPROGRAMS'] = env.Detect(['mpiCC', 'mpicxx'])
   if not env['CXX']:
