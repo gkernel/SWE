@@ -35,6 +35,7 @@ solver='fwavevec'
 #solver='augrie'
 #writeNetCDF='yes'
 write_output='no'
+scalasca_instrument='yes'
 
 # Library paths (only required of not installed in default path)
 #netCDFDir=''

@@ -116,7 +116,9 @@ vars.AddVariables(
 
   BoolVariable( 'loop_openmp', 'enable loop parallelization using OpenMP', False ),
 
-  BoolVariable( 'write_output', 'write output files at each checkpoint', True )
+  BoolVariable( 'write_output', 'write output files at each checkpoint', True ),
+
+  BoolVariable( 'scalasca_instrument', 'enable when code has been instrumented with scalasca, to use scalasca during compilation', False )
 )
 
 # external variables
@@ -171,7 +173,10 @@ if env['parallelization'] in ['mpi', 'mpi_with_cuda']:
   if env['compiler'] == 'cray':
     env['CXX'] = 'CC'
   else:
-    env['CXX'] = env['LINKERFORPROGRAMS'] = env.Detect(['mpiCC', 'mpicxx'])
+    if env['scalasca_instrument']:
+      env['CXX'] = env['LINKERFORPROGRAMS'] = env.Detect(['scalasca -instrument -comp=none -user -mode=MPI mpiCC', 'scalasca -instrument -comp=none -user -mode=MPI mpicxx'])
+    else:
+      env['CXX'] = env['LINKERFORPROGRAMS'] = env.Detect(['mpiCC', 'mpicxx'])
   if not env['CXX']:
       print >> sys.stderr, '** MPI compiler not found, please update PATH environment variable'
       Exit(1)
