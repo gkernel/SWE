@@ -35,7 +35,9 @@
 #include <string>
 #include <vector>
 
+#ifdef SCALASCA_INSTRUMENT
 #include "epik_user.h"
+#endif
 
 #ifndef CUDA
 #include "blocks/SWE_WavePropagationBlock.hh"
@@ -444,7 +446,9 @@ int main( int argc, char** argv ) {
 
   unsigned int l_iterations = 0;
 
-	EPIK_FUNC_START();
+#ifdef SCALASCA_INSTRUMENT
+  EPIK_FUNC_START();
+#endif
 
   // loop over checkpoints
   for(int c=1; c<=l_numberOfCheckPoints; c++) {
@@ -513,7 +517,9 @@ int main( int argc, char** argv ) {
       progressBar.update(l_t);
     }
 
-	EPIK_FUNC_END();
+#ifdef SCALASCA_INSTRUMENT
+  EPIK_FUNC_END();
+#endif // SCALASCA_INSTRUMENT
 
 #ifdef WRITE_OUPUT
     // print current simulation time

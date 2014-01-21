@@ -244,6 +244,9 @@ if env['loop_openmp']:
 if env['write_output']:
   env.Append(CCFLAGS=['-DWRITE_OUTPUT'])
 
+if env['scalasca_instrument']:
+  env.Append(CCFLAGS=['-DSCALASCA_INSTRUMENT'])
+
 # Vectorization?
 if env['compileMode'] == 'release' and env['vectorize']:
   env.Append(CPPDEFINES=['VECTORIZE'])
